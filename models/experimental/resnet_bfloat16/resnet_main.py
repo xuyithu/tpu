@@ -149,7 +149,7 @@ BASE_LEARNING_RATE = 0.1     # base LR when batch size = 256
 MOMENTUM = 0.9
 WEIGHT_DECAY = 1e-4
 LR_SCHEDULE = [    # (multiplier, epoch to start) tuples
-    (1.0, 5), (0.1, 30), (0.01, 60), (0.001, 80)
+    (1.0, 4), (0.1, 21), (0.01, 35), (0.001, 43)
 ]
 
 
@@ -390,6 +390,31 @@ def main(unused_argv):
       data_dir=FLAGS.data_dir,
       num_parallel_calls=FLAGS.num_parallel_calls,
       use_transpose=FLAGS.use_transpose)
+  # TODO(huangyp): Use lambda instead.
+  imagenet_train_small = imagenet_input.ImageNetInput(
+      is_training=True,
+      image_size=128,
+      data_dir=FLAGS.data_dir,
+      num_parallel_calls=FLAGS.num_parallel_calls,
+      use_transpose=FLAGS.use_transpose)
+  imagenet_eval_small = imagenet_input.ImageNetInput(
+      is_training=False,
+      image_size=128,
+      data_dir=FLAGS.data_dir,
+      num_parallel_calls=FLAGS.num_parallel_calls,
+      use_transpose=FLAGS.use_transpose)
+  imagenet_train_large = imagenet_input.ImageNetInput(
+      is_training=True,
+      image_size=288,
+      data_dir=FLAGS.data_dir,
+      num_parallel_calls=FLAGS.num_parallel_calls,
+      use_transpose=FLAGS.use_transpose)
+  imagenet_eval_large = imagenet_input.ImageNetInput(
+      is_training=False,
+      image_size=288,
+      data_dir=FLAGS.data_dir,
+      num_parallel_calls=FLAGS.num_parallel_calls,
+      use_transpose=FLAGS.use_transpose)
 
   current_step = estimator._load_global_step_from_checkpoint_dir(FLAGS.model_dir)  # pylint: disable=protected-access,line-too-long
   steps_per_epoch = NUM_TRAIN_IMAGES // FLAGS.train_batch_size
@@ -450,10 +475,18 @@ def main(unused_argv):
 
   elif FLAGS.mode == 'train_and_eval':
     results = []
-    while current_epoch < 95:
+    train_input_fn = imagenet_train_small.input_fn
+    eval_input_fn = imagenet_eval_small.input_fn
+    while current_epoch < 45:
       next_checkpoint = (current_epoch + 1) * steps_per_epoch
+      if current_epoch == 18:  # 18:
+        train_input_fn = imagenet_train.input_fn
+        eval_input_fn = imagenet_eval.input_fn
+      if current_epoch == 41:  # 41:
+        train_input_fn = imagenet_train_large.input_fn
+        eval_input_fn = imagenet_eval_large.input_fn
       resnet_classifier.train(
-          input_fn=imagenet_train.input_fn, max_steps=next_checkpoint)
+          input_fn=train_input_fn, max_steps=next_checkpoint)
       current_epoch += 1
 
       tf.logging.info('Finished training up to step %d. Elapsed seconds %d.' %
@@ -465,7 +498,7 @@ def main(unused_argv):
       # consistent, the evaluated images are also consistent.
       tf.logging.info('Starting to evaluate.')
       eval_results = resnet_classifier.evaluate(
-          input_fn=imagenet_eval.input_fn,
+          input_fn=eval_input_fn,
           steps=NUM_EVAL_IMAGES // FLAGS.eval_batch_size)
       tf.logging.info('Eval results: %s' % eval_results)
 

@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import os
 
+from absl import flags
 import tensorflow as tf
 
 import resnet_preprocessing
@@ -73,6 +74,7 @@ class ImageNetInput(object):
                data_dir,
                num_cores=8,
                num_parallel_calls=64,
+               image_size=224,
                use_transpose=False):
     self.image_preprocessing_fn = resnet_preprocessing.preprocess_image
     self.is_training = is_training
@@ -80,6 +82,7 @@ class ImageNetInput(object):
     self.num_cores = num_cores
     self.num_parallel_calls = num_parallel_calls
     self.use_transpose = use_transpose
+    self.image_size = image_size
 
   def dataset_parser(self, value):
     """Parse an ImageNet record from a serialized string Tensor."""
@@ -110,6 +113,7 @@ class ImageNetInput(object):
     image = self.image_preprocessing_fn(
         image=image,
         is_training=self.is_training,
+        image_size=self.image_size,
     )
 
     # Subtract one so that labels are in [0, 1000).

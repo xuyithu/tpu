@@ -76,6 +76,32 @@ def main(unused_argv):
       data_dir=FLAGS.data_dir,
       use_transpose=FLAGS.use_transpose)
 
+  # TODO(huangyp): Use lambda instead.
+  imagenet_train_small = imagenet_input.ImageNetInput(
+      is_training=True,
+      image_size=128,
+      data_dir=FLAGS.data_dir,
+      num_parallel_calls=FLAGS.num_parallel_calls,
+      use_transpose=FLAGS.use_transpose)
+  imagenet_eval_small = imagenet_input.ImageNetInput(
+      is_training=False,
+      image_size=128,
+      data_dir=FLAGS.data_dir,
+      num_parallel_calls=FLAGS.num_parallel_calls,
+      use_transpose=FLAGS.use_transpose)
+  imagenet_train_large = imagenet_input.ImageNetInput(
+      is_training=True,
+      image_size=288,
+      data_dir=FLAGS.data_dir,
+      num_parallel_calls=FLAGS.num_parallel_calls,
+      use_transpose=FLAGS.use_transpose)
+  imagenet_eval_large = imagenet_input.ImageNetInput(
+      is_training=False,
+      image_size=288,
+      data_dir=FLAGS.data_dir,
+      num_parallel_calls=FLAGS.num_parallel_calls,
+      use_transpose=FLAGS.use_transpose)
+
   if FLAGS.mode == 'train':
     current_step = estimator._load_global_step_from_checkpoint_dir(FLAGS.model_dir)  # pylint: disable=protected-access,line-too-long
     batches_per_epoch = resnet_main.NUM_TRAIN_IMAGES / FLAGS.train_batch_size
@@ -93,8 +119,20 @@ def main(unused_argv):
       with tf.gfile.GFile(os.path.join(FLAGS.model_dir, 'START'), 'w') as f:
         f.write(str(start_timestamp))
 
-    resnet_classifier.train(
-        input_fn=imagenet_train.input_fn, max_steps=FLAGS.train_steps)
+    current_epoch = 0
+
+    while current_epoch < 45:
+      next_checkpoint = (current_epoch + 1) * steps_per_epoch
+      if current_epoch < 18:
+        train_input_fn = imagenet_train_small.input_fn
+      if current_epoch >= 18 and current_epoch < 41:
+        train_input_fn = imagenet_train.input_fn
+      if current_epoch >= 41:  # 41:
+        train_input_fn = imagenet_train_large.input_fn
+
+      resnet_classifier.train(
+          input_fn=train_input_fn, max_steps=next_checkpoint)
+      current_epoch += 1
 
   else:
     assert FLAGS.mode == 'eval'
@@ -122,10 +160,17 @@ def main(unused_argv):
       end_timestamp = tf.gfile.Stat(ckpt + '.index').mtime_nsec
       elapsed_hours = (end_timestamp - start_timestamp) / (1e9 * 3600.0)
 
+      if current_epoch < 18:
+        eval_input_fn = imagenet_eval_small.input_fn
+      if current_epoch >= 18 and current_epoch < 41:
+        eval_input_fn = imagenet_eval.input_fn
+      if current_epoch >= 41:  # 41:
+        eval_input_fn = imagenet_eval_large.input_fn
+
       tf.logging.info('Starting to evaluate.')
       eval_start = time.time()  # This time will include compilation time
       eval_results = resnet_classifier.evaluate(
-          input_fn=imagenet_eval.input_fn,
+          input_fn=eval_input_fn,
           steps=eval_steps,
           checkpoint_path=ckpt)
       eval_time = int(time.time() - eval_start)
